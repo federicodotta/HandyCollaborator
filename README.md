@@ -24,7 +24,7 @@ Currently, due to limitations in Burp Suite API, it is not possible to retrieve 
 ![Handy Collaborator Screenshot](https://raw.githubusercontent.com/federicodotta/HandyCollaborator/master/HandyCollaborator1.png)
 ![Handy Collaborator Screenshot](https://raw.githubusercontent.com/federicodotta/HandyCollaborator/master/HandyCollaborator2.png)
 ![Handy Collaborator Screenshot](https://raw.githubusercontent.com/federicodotta/HandyCollaborator/master/HandyCollaborator4.png)
-![Handy Collaborator Screenshot](https://raw.githubusercontent.com/federicodotta/HandyCollaborator/master/HandyCollaborator3.png.PNG)
+![Handy Collaborator Screenshot](https://raw.githubusercontent.com/federicodotta/HandyCollaborator/master/HandyCollaborator3.png)
 
 # MIT License
 
