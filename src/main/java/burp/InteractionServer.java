@@ -17,7 +17,7 @@ import java.util.Date;
 public class InteractionServer extends Thread {
 
 	private IBurpExtenderCallbacks callbacks;
-	private HashMap<String,IHttpRequestResponse> processedRequestResponse;
+	private HashMap<String,IHttpRequestResponsePersisted> processedRequestResponse;
 	
     private PrintWriter stdout;
     private PrintWriter stderr;
@@ -33,7 +33,7 @@ public class InteractionServer extends Thread {
     
     private static final int pollingMilliseconds = 3000;
 	
-	public InteractionServer(IBurpExtenderCallbacks callbacks, HashMap<String,IHttpRequestResponse> processedRequestResponse, IBurpCollaboratorClientContext collaboratorContext) {
+	public InteractionServer(IBurpExtenderCallbacks callbacks, HashMap<String,IHttpRequestResponsePersisted> processedRequestResponse, IBurpCollaboratorClientContext collaboratorContext) {
 		
 		this.callbacks = callbacks;
 		this.processedRequestResponse = processedRequestResponse;

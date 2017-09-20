@@ -22,7 +22,7 @@ public class BurpExtender implements IBurpExtender, IContextMenuFactory, ActionL
     
     private IContextMenuInvocation currentInvocation;
     
-    private HashMap<String,IHttpRequestResponse> processedRequestResponse;
+    private HashMap<String,IHttpRequestResponsePersisted> processedRequestResponse;
     
     private IBurpCollaboratorClientContext collaboratorContext;
     
@@ -61,7 +61,7 @@ public class BurpExtender implements IBurpExtender, IContextMenuFactory, ActionL
                 
         collaboratorContext = callbacks.createBurpCollaboratorClientContext();
         
-        processedRequestResponse = new HashMap<String,IHttpRequestResponse>();
+        processedRequestResponse = new HashMap<String,IHttpRequestResponsePersisted>();
         interactionServer = new InteractionServer(callbacks,processedRequestResponse,collaboratorContext);
         
         interactionServer.start();
@@ -138,7 +138,7 @@ public class BurpExtender implements IBurpExtender, IContextMenuFactory, ActionL
 			
 			// Add request/response to processed requests/responses
 			if(command.equals("contextInsertCollaboratorPayload")) {
-				processedRequestResponse.put(currentCollaboratorPayload, selectedItems[0]);
+				processedRequestResponse.put(currentCollaboratorPayload, callbacks.saveBuffersToTempFiles(selectedItems[0]));
 			}
 
 		}
@@ -193,7 +193,7 @@ public class BurpExtender implements IBurpExtender, IContextMenuFactory, ActionL
 		
 		// Save all requests/reponses and collaborator payloads
 		for(int i=0; i<count; i++) {
-			processedRequestResponse.put(collaboratorPayloads[i], messageInfo);
+			processedRequestResponse.put(collaboratorPayloads[i], callbacks.saveBuffersToTempFiles(messageInfo));
 		}
 		
 	}
