@@ -43,7 +43,12 @@ public class InteractionServer extends Thread {
 		this.stderr = new PrintWriter(callbacks.getStderr(), true); 
         
 		this.collaboratorContextList = new ArrayList<IBurpCollaboratorClientContext>();
-		this.collaboratorContextList.add(initialCollaboratorContext);
+		
+		if(initialCollaboratorContext != null) {
+			this.collaboratorContextList.add(initialCollaboratorContext);
+		} else {
+			stdout.println("Collaborator disabled");
+		}
 		
 		this.goOn = true;
 		
@@ -190,27 +195,33 @@ public class InteractionServer extends Thread {
 			}
 			
 			for(int i=0;i<collaboratorContextList.size();i++) {
-				
-				stdout.println("Polling " + collaboratorContextList.get(i).getCollaboratorServerLocation());
-			
-				List<IBurpCollaboratorInteraction> allCollaboratorInteractions = collaboratorContextList.get(i).fetchAllCollaboratorInteractions();
-				
-				for(int j=0;  j < allCollaboratorInteractions.size(); j++) {
-									
-					addIssue(allCollaboratorInteractions.get(j),collaboratorContextList.get(i));
+								
+				try {
 					
-					/*
-					// DEBUG - Print all interaction properties
-					Map<java.lang.String,java.lang.String> currentProperties = allCollaboratorInteractions.get(i).getProperties();
-					Set<String> a = currentProperties.keySet();
-					Iterator<String> b = a.iterator();
-					while(b.hasNext()) {
-						String d = b.next();
-						stdout.println(d);
-						stdout.println(currentProperties.get(d));
+					stdout.println("Polling " + collaboratorContextList.get(i).getCollaboratorServerLocation());
+								
+					List<IBurpCollaboratorInteraction> allCollaboratorInteractions = collaboratorContextList.get(i).fetchAllCollaboratorInteractions();
+					
+					for(int j=0;  j < allCollaboratorInteractions.size(); j++) {
+										
+						addIssue(allCollaboratorInteractions.get(j),collaboratorContextList.get(i));
+						
+						/*
+						// DEBUG - Print all interaction properties
+						Map<java.lang.String,java.lang.String> currentProperties = allCollaboratorInteractions.get(i).getProperties();
+						Set<String> a = currentProperties.keySet();
+						Iterator<String> b = a.iterator();
+						while(b.hasNext()) {
+							String d = b.next();
+							stdout.println(d);
+							stdout.println(currentProperties.get(d));
+						}
+						*/
+						
 					}
-					*/
 					
+				} catch(IllegalStateException e) {
+					stdout.println("Can't fetch interactions while Collaborator is disabled (Burp Suite limitation)");
 				}
 					
 			}

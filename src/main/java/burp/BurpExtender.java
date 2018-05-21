@@ -48,6 +48,8 @@ public class BurpExtender implements IBurpExtender, IContextMenuFactory, ActionL
     
     private JPanel mainPanel;
     private JCheckBox enablePolling;
+    
+    private boolean interactionServerNeverStarted;
 
 	public void registerExtenderCallbacks(final IBurpExtenderCallbacks callbacks) {
 
@@ -78,16 +80,29 @@ public class BurpExtender implements IBurpExtender, IContextMenuFactory, ActionL
         stdout.println("Github: https://github.com/federicodotta/HandyCollaborator");
         stdout.println("");	
                 
-        collaboratorContext = callbacks.createBurpCollaboratorClientContext();
+        
+        initializeCurrentCollaboratorVariables();
+        
+        if(!(currentCollaboratorType.equals("none"))) {
+        	collaboratorContext = callbacks.createBurpCollaboratorClientContext();
+        } else {
+        	collaboratorContext = null;
+        }
         
         processedRequestResponse = new HashMap<String,IHttpRequestResponsePersisted>();
         
         //currentCollaboratorLocation = getCurrentCollaboratorLocation();
-        initializeCurrentCollaboratorVariables();
         
         interactionServer = new InteractionServer(callbacks,processedRequestResponse,collaboratorContext);
-        
+                
         interactionServer.start();
+        
+        if(collaboratorContext == null) {
+        	interactionServer.pause();
+        	interactionServerNeverStarted = true;
+        } else {
+        	interactionServerNeverStarted = false;
+        }
         
         SwingUtilities.invokeLater(new Runnable()  {
         	
@@ -166,16 +181,7 @@ public class BurpExtender implements IBurpExtender, IContextMenuFactory, ActionL
 			
 		}
 	}
-	
-	/*public String getCurrentCollaboratorLocation() {
 		
-		String collaboratorOption = callbacks.saveConfigAsJson("project_options.misc.collaborator_server");
-		JSONObject rootJsonObject = new JSONObject(collaboratorOption);
-		String locationCollaboratorServer = rootJsonObject.getJSONObject("project_options").getJSONObject("misc").getJSONObject("collaborator_server").getString("location");
-		return locationCollaboratorServer;
-		
-	}*/
-	
 	public void initializeCurrentCollaboratorVariables() {
 		
 		String collaboratorOption = callbacks.saveConfigAsJson("project_options.misc.collaborator_server");
@@ -187,8 +193,7 @@ public class BurpExtender implements IBurpExtender, IContextMenuFactory, ActionL
 		
 	}
 	
-	public boolean isCollaboratorChanged() {
-		
+	public boolean isCollaboratorChanged() {		
 		
 		String collaboratorOption = callbacks.saveConfigAsJson("project_options.misc.collaborator_server");
 		JSONObject rootJsonObject = new JSONObject(collaboratorOption);
@@ -201,12 +206,40 @@ public class BurpExtender implements IBurpExtender, IContextMenuFactory, ActionL
 		} else {
 			return false;
 		}
-		/*
-		String collaboratorOption = callbacks.saveConfigAsJson("project_options.misc.collaborator_server");
-		JSONObject rootJsonObject = new JSONObject(collaboratorOption);
-		String locationCollaboratorServer = rootJsonObject.getJSONObject("project_options").getJSONObject("misc").getJSONObject("collaborator_server").getString("location");
-		return locationCollaboratorServer;
-		*/
+		
+	}
+	
+	public void checkCollaboratorChanges() {
+		
+		if(isCollaboratorChanged()) {
+			
+			String oldCollaboratorType = currentCollaboratorType;
+			
+			initializeCurrentCollaboratorVariables();
+			
+			if(!(currentCollaboratorType.equals("none"))) {
+				
+				stdout.println("Collaborator location changed! Adding a new collaborator context to the polling thread!");
+				collaboratorContext = callbacks.createBurpCollaboratorClientContext();
+				interactionServer.addNewCollaboratorContext(collaboratorContext);
+				
+				// Start Collaborator Polling Thread if when the extension was loaded the Collaborator was disabled
+				if(interactionServerNeverStarted) {
+					interactionServer.resumeThread();
+					interactionServerNeverStarted = false;
+				}
+									
+			} else {
+				collaboratorContext = null;
+				stdout.println("Collaborator disabled!");
+				
+				// Stop Collaborator Polling Thread if was not stopped 
+				//if(!(oldCollaboratorType.equals("none")))
+				//	interactionServer.pause();
+			}		
+			
+		}
+		
 	}
 
 	public void actionPerformed(ActionEvent event) {
@@ -227,23 +260,11 @@ public class BurpExtender implements IBurpExtender, IContextMenuFactory, ActionL
 	
 		} else if(command.equals("contextInsertCollaboratorPayload") || command.equals("contextInsertCollaboratorInsertionPoint")) {
 			
-			// ******** TEST
-			
+			// DEBUG
 			//String collaboratorOption = callbacks.saveConfigAsJson("project_options.misc.collaborator_server");
 			//stdout.println(collaboratorOption);
-			//JSONObject rootJsonObject = new JSONObject(collaboratorOption);
-			//String locationCollaboratorServer = rootJsonObject.getJSONObject("project_options").getJSONObject("misc").getJSONObject("collaborator_server").getString("location");
-			//stdout.println(locationCollaboratorServer);
 			
-			if(isCollaboratorChanged()) {
-				stdout.println("Collaborator location changed! Adding a new collaborator context to the polling thread!");
-				collaboratorContext = callbacks.createBurpCollaboratorClientContext();
-				interactionServer.addNewCollaboratorContext(collaboratorContext);
-				initializeCurrentCollaboratorVariables();
-			}
-			
-			
-			// ******** END TEST			
+			checkCollaboratorChanges();			
 			
 			IHttpRequestResponse[] selectedItems = currentInvocation.getSelectedMessages();
 			int[] selectedBounds = currentInvocation.getSelectionBounds();
@@ -262,7 +283,9 @@ public class BurpExtender implements IBurpExtender, IContextMenuFactory, ActionL
 		
 			String currentCollaboratorPayload = "";
 			
-			if(command.equals("contextInsertCollaboratorPayload")) {			
+			if(collaboratorContext == null) {
+				currentCollaboratorPayload = "THE_COLLABORATOR_IS_DISABLED";
+			} else if(command.equals("contextInsertCollaboratorPayload")) {			
 				currentCollaboratorPayload = collaboratorContext.generatePayload(true);
 			} else {
 				currentCollaboratorPayload = collaboratorInsertionPointString;
@@ -296,46 +319,56 @@ public class BurpExtender implements IBurpExtender, IContextMenuFactory, ActionL
 	
 	private void replaceInsertionPointWithPayload(IHttpRequestResponse messageInfo, boolean request) {
 		
-		String requestResponse = "";
+		checkCollaboratorChanges();
 		
-		if(request){
-			byte[] requestByte = messageInfo.getRequest();
-			requestResponse = new String(requestByte);			
+		if(collaboratorContext != null) {
+		
+			String requestResponse = "";
+			
+			if(request){
+				byte[] requestByte = messageInfo.getRequest();
+				requestResponse = new String(requestByte);			
+			} else {
+				byte[] responseByte = messageInfo.getResponse();
+				requestResponse = new String(responseByte);	
+			}
+			
+			// Count occurences of insertion point string in request/response
+			int lastIndex = 0;
+			int count = 0;
+			while(lastIndex != -1){
+	
+			    lastIndex = requestResponse.indexOf(collaboratorInsertionPointString,lastIndex);
+	
+			    if(lastIndex != -1){
+			        count ++;
+			        lastIndex += collaboratorInsertionPointString.length();
+			    }
+			}
+			
+			// Replace all the occurrences with a Collaborator payload
+			String[] collaboratorPayloads = new String[count];
+			for(int i=0; i<count; i++) {
+				collaboratorPayloads[i] = collaboratorContext.generatePayload(true);
+				requestResponse = requestResponse.replaceFirst(collaboratorInsertionPointString, collaboratorPayloads[i]);
+			}
+			
+			// Replace request/response with new one
+			if(request){
+				messageInfo.setRequest(requestResponse.getBytes());
+			} else {
+				messageInfo.setResponse(requestResponse.getBytes());
+			}
+			
+			// Save all requests/reponses and collaborator payloads
+			for(int i=0; i<count; i++) {
+				processedRequestResponse.put(collaboratorPayloads[i], callbacks.saveBuffersToTempFiles(messageInfo));
+			}
+			
 		} else {
-			byte[] responseByte = messageInfo.getResponse();
-			requestResponse = new String(responseByte);	
-		}
-		
-		// Count occurences of insertion point string in request/response
-		int lastIndex = 0;
-		int count = 0;
-		while(lastIndex != -1){
-
-		    lastIndex = requestResponse.indexOf(collaboratorInsertionPointString,lastIndex);
-
-		    if(lastIndex != -1){
-		        count ++;
-		        lastIndex += collaboratorInsertionPointString.length();
-		    }
-		}
-		
-		// Replace all the occurrences with a Collaborator payload
-		String[] collaboratorPayloads = new String[count];
-		for(int i=0; i<count; i++) {
-			collaboratorPayloads[i] = collaboratorContext.generatePayload(true);
-			requestResponse = requestResponse.replaceFirst(collaboratorInsertionPointString, collaboratorPayloads[i]);
-		}
-		
-		// Replace request/response with new one
-		if(request){
-			messageInfo.setRequest(requestResponse.getBytes());
-		} else {
-			messageInfo.setResponse(requestResponse.getBytes());
-		}
-		
-		// Save all requests/reponses and collaborator payloads
-		for(int i=0; i<count; i++) {
-			processedRequestResponse.put(collaboratorPayloads[i], callbacks.saveBuffersToTempFiles(messageInfo));
+			
+			stderr.println("The collaborator is disabled. Replacement with collaborator payload is not possible...");
+			
 		}
 		
 	}
