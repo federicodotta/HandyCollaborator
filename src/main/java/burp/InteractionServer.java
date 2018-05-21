@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.TimeZone;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Date;
 
@@ -22,7 +23,7 @@ public class InteractionServer extends Thread {
     private PrintWriter stdout;
     private PrintWriter stderr;
     
-    private IBurpCollaboratorClientContext collaboratorContext;
+    private List<IBurpCollaboratorClientContext> collaboratorContextList;
     
     private volatile boolean goOn;
     
@@ -33,7 +34,7 @@ public class InteractionServer extends Thread {
     
     private static final int pollingMilliseconds = 3000;
 	
-	public InteractionServer(IBurpExtenderCallbacks callbacks, HashMap<String,IHttpRequestResponsePersisted> processedRequestResponse, IBurpCollaboratorClientContext collaboratorContext) {
+	public InteractionServer(IBurpExtenderCallbacks callbacks, HashMap<String,IHttpRequestResponsePersisted> processedRequestResponse, IBurpCollaboratorClientContext initialCollaboratorContext) {
 		
 		this.callbacks = callbacks;
 		this.processedRequestResponse = processedRequestResponse;
@@ -41,8 +42,9 @@ public class InteractionServer extends Thread {
         // Initialize stdout and stderr
 		this.stdout = new PrintWriter(callbacks.getStdout(), true);
 		this.stderr = new PrintWriter(callbacks.getStderr(), true); 
-        		
-		this.collaboratorContext = collaboratorContext;
+        
+		this.collaboratorContextList = new ArrayList<IBurpCollaboratorClientContext>();
+		this.collaboratorContextList.add(initialCollaboratorContext);
 		
 		this.goOn = true;
 		
@@ -52,7 +54,11 @@ public class InteractionServer extends Thread {
 		this.goOn = goOn;
 	}
 	
-	public void addIssue(IBurpCollaboratorInteraction interaction) {
+	public void addNewCollaboratorContext(IBurpCollaboratorClientContext collaboratorContext) {
+		this.collaboratorContextList.add(collaboratorContext);
+	}
+	
+	public void addIssue(IBurpCollaboratorInteraction interaction, IBurpCollaboratorClientContext collaboratorContext) {
 		
 		String interactionId = interaction.getProperty("interaction_id");
 		IHttpRequestResponse requestResponse = processedRequestResponse.get(interactionId + "." + collaboratorContext.getCollaboratorServerLocation());
@@ -129,17 +135,50 @@ public class InteractionServer extends Thread {
 		
 		}
 		
-		CustomScanIssue newIssue = new CustomScanIssue(
-				requestResponse.getHttpService(),
-                callbacks.getHelpers().analyzeRequest(requestResponse).getUrl(), 
-                new IHttpRequestResponse[] { requestResponse }, 
-                interaction.getProperty("type") + issueName,
-                severity,
-                confidence,
-                issueDetails,
-                remediation);
+		// With Burp Professional an issue is added
+		if(callbacks.getBurpVersion()[0].trim().equals("Burp Suite Professional")) {
+			
+			CustomScanIssue newIssue = new CustomScanIssue(
+					requestResponse.getHttpService(),
+	                callbacks.getHelpers().analyzeRequest(requestResponse).getUrl(), 
+	                new IHttpRequestResponse[] { requestResponse }, 
+	                interaction.getProperty("type") + issueName,
+	                severity,
+	                confidence,
+	                issueDetails,
+	                remediation);
 
-		callbacks.addScanIssue(newIssue);
+			callbacks.addScanIssue(newIssue);
+			
+		// With Burp Free the issue is printed in stdout, otherwise the plugin is only for Pro version of Burp Suite	
+		} else {
+			
+			stdout.println("****** NEW HANDY COLLABORATOR INTERACTION - BEGIN ******");
+			stdout.println("Issue: " + interaction.getProperty("type") + issueName);
+			stdout.println("Severity: " + severity);
+			stdout.println("Confidence: " + confidence);
+			stdout.println("Host: ");
+			stdout.println("Path: ");
+			stdout.println("");
+			stdout.println("Issue Detail:");
+			stdout.println(issueDetails);
+			stdout.println("");
+			stdout.println("Remediation Detail:");
+			stdout.println(remediation);
+			stdout.println("");
+			stdout.println("Request (encoded in Base64)");
+			stdout.println(callbacks.getHelpers().base64Encode(requestResponse.getRequest()));
+			stdout.println("");
+			if(requestResponse.getResponse() != null) {
+				stdout.println("Response (encoded in Base64)");
+				stdout.println(callbacks.getHelpers().base64Encode(requestResponse.getResponse()));
+				stdout.println("");
+			}
+			stdout.println("****** NEW HANDY COLLABORATOR INTERACTION - END ******");
+			stdout.println("");
+			stdout.println("");
+			
+		}
 	
 	}
 	
@@ -149,24 +188,32 @@ public class InteractionServer extends Thread {
 		
 		while(goOn) {
 			
-			List<IBurpCollaboratorInteraction> allCollaboratorInteractions = collaboratorContext.fetchAllCollaboratorInteractions();
 			
-			for(int i=0;  i < allCollaboratorInteractions.size(); i++) {
-								
-				addIssue(allCollaboratorInteractions.get(i));
+			
+			for(int i=0;i<collaboratorContextList.size();i++) {
 				
-				/*
-				// DEBUG - Print all interaction properties
-				Map<java.lang.String,java.lang.String> currentProperties = allCollaboratorInteractions.get(i).getProperties();
-				Set<String> a = currentProperties.keySet();
-				Iterator<String> b = a.iterator();
-				while(b.hasNext()) {
-					String d = b.next();
-					stdout.println(d);
-					stdout.println(currentProperties.get(d));
+				stdout.println("Polling " + collaboratorContextList.get(i).getCollaboratorServerLocation());
+			
+				List<IBurpCollaboratorInteraction> allCollaboratorInteractions = collaboratorContextList.get(i).fetchAllCollaboratorInteractions();
+				
+				for(int j=0;  j < allCollaboratorInteractions.size(); j++) {
+									
+					addIssue(allCollaboratorInteractions.get(j),collaboratorContextList.get(i));
+					
+					/*
+					// DEBUG - Print all interaction properties
+					Map<java.lang.String,java.lang.String> currentProperties = allCollaboratorInteractions.get(i).getProperties();
+					Set<String> a = currentProperties.keySet();
+					Iterator<String> b = a.iterator();
+					while(b.hasNext()) {
+						String d = b.next();
+						stdout.println(d);
+						stdout.println(currentProperties.get(d));
+					}
+					*/
+					
 				}
-				*/
-				
+					
 			}
 			
 			try {

@@ -8,6 +8,8 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 
+import org.json.*;
+
 import javax.swing.JMenuItem;
 
 import org.apache.commons.lang3.ArrayUtils;
@@ -29,6 +31,11 @@ public class BurpExtender implements IBurpExtender, IContextMenuFactory, ActionL
     private InteractionServer interactionServer;
     
     private final String collaboratorInsertionPointString = (char)167 + "COLLABORATOR_PAYLOAD" + (char)167;
+    
+    private String currentCollaboratorLocation;
+    private boolean currentCollaboratorPollOverUnenecryptedHttp;
+    private String currentCollaboratorPollingLocation;
+    private String currentCollaboratorType;
 
 	public void registerExtenderCallbacks(IBurpExtenderCallbacks callbacks) {
 
@@ -62,12 +69,16 @@ public class BurpExtender implements IBurpExtender, IContextMenuFactory, ActionL
         collaboratorContext = callbacks.createBurpCollaboratorClientContext();
         
         processedRequestResponse = new HashMap<String,IHttpRequestResponsePersisted>();
+        
+        //currentCollaboratorLocation = getCurrentCollaboratorLocation();
+        initializeCurrentCollaboratorVariables();
+        
         interactionServer = new InteractionServer(callbacks,processedRequestResponse,collaboratorContext);
         
         interactionServer.start();
 		
 	}
-
+	
 	public List<JMenuItem> createMenuItems(IContextMenuInvocation invocation) {
 
 		if(invocation.getInvocationContext() == IContextMenuInvocation.CONTEXT_MESSAGE_EDITOR_REQUEST || 
@@ -96,12 +107,72 @@ public class BurpExtender implements IBurpExtender, IContextMenuFactory, ActionL
 			
 		}
 	}
+	
+	/*public String getCurrentCollaboratorLocation() {
+		
+		String collaboratorOption = callbacks.saveConfigAsJson("project_options.misc.collaborator_server");
+		JSONObject rootJsonObject = new JSONObject(collaboratorOption);
+		String locationCollaboratorServer = rootJsonObject.getJSONObject("project_options").getJSONObject("misc").getJSONObject("collaborator_server").getString("location");
+		return locationCollaboratorServer;
+		
+	}*/
+	
+	public void initializeCurrentCollaboratorVariables() {
+		
+		String collaboratorOption = callbacks.saveConfigAsJson("project_options.misc.collaborator_server");
+		JSONObject rootJsonObject = new JSONObject(collaboratorOption);
+		currentCollaboratorLocation = rootJsonObject.getJSONObject("project_options").getJSONObject("misc").getJSONObject("collaborator_server").getString("location");
+		currentCollaboratorPollOverUnenecryptedHttp = rootJsonObject.getJSONObject("project_options").getJSONObject("misc").getJSONObject("collaborator_server").getBoolean("poll_over_unencrypted_http");
+		currentCollaboratorPollingLocation = rootJsonObject.getJSONObject("project_options").getJSONObject("misc").getJSONObject("collaborator_server").getString("polling_location");
+		currentCollaboratorType = rootJsonObject.getJSONObject("project_options").getJSONObject("misc").getJSONObject("collaborator_server").getString("type");
+		
+	}
+	
+	public boolean isCollaboratorChanged() {
+		
+		
+		String collaboratorOption = callbacks.saveConfigAsJson("project_options.misc.collaborator_server");
+		JSONObject rootJsonObject = new JSONObject(collaboratorOption);
+				
+		if(!(currentCollaboratorLocation.equals(rootJsonObject.getJSONObject("project_options").getJSONObject("misc").getJSONObject("collaborator_server").getString("location"))) ||
+		   !(currentCollaboratorPollOverUnenecryptedHttp == rootJsonObject.getJSONObject("project_options").getJSONObject("misc").getJSONObject("collaborator_server").getBoolean("poll_over_unencrypted_http")) ||
+		   !(currentCollaboratorPollingLocation.equals(rootJsonObject.getJSONObject("project_options").getJSONObject("misc").getJSONObject("collaborator_server").getString("polling_location"))) ||
+		   !(currentCollaboratorType.equals(rootJsonObject.getJSONObject("project_options").getJSONObject("misc").getJSONObject("collaborator_server").getString("type"))) ) {
+			return true;
+		} else {
+			return false;
+		}
+		/*
+		String collaboratorOption = callbacks.saveConfigAsJson("project_options.misc.collaborator_server");
+		JSONObject rootJsonObject = new JSONObject(collaboratorOption);
+		String locationCollaboratorServer = rootJsonObject.getJSONObject("project_options").getJSONObject("misc").getJSONObject("collaborator_server").getString("location");
+		return locationCollaboratorServer;
+		*/
+	}
 
 	public void actionPerformed(ActionEvent event) {
 
 		String command = event.getActionCommand();
 	
 		if(command.equals("contextInsertCollaboratorPayload") || command.equals("contextInsertCollaboratorInsertionPoint")) {
+			
+			// ******** TEST
+			
+			//String collaboratorOption = callbacks.saveConfigAsJson("project_options.misc.collaborator_server");
+			//stdout.println(collaboratorOption);
+			//JSONObject rootJsonObject = new JSONObject(collaboratorOption);
+			//String locationCollaboratorServer = rootJsonObject.getJSONObject("project_options").getJSONObject("misc").getJSONObject("collaborator_server").getString("location");
+			//stdout.println(locationCollaboratorServer);
+			
+			if(isCollaboratorChanged()) {
+				stdout.println("Collaborator location changed! Adding a new collaborator context to the polling thread!");
+				collaboratorContext = callbacks.createBurpCollaboratorClientContext();
+				interactionServer.addNewCollaboratorContext(collaboratorContext);
+				initializeCurrentCollaboratorVariables();
+			}
+			
+			
+			// ******** END TEST			
 			
 			IHttpRequestResponse[] selectedItems = currentInvocation.getSelectedMessages();
 			int[] selectedBounds = currentInvocation.getSelectionBounds();
