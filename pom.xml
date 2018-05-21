@@ -2,7 +2,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>org.fd</groupId>
 	<artifactId>HandyCollaborator</artifactId>
-	<version>0.1</version>
+	<version>0.2</version>
 	<name>Handy Collaborator</name>
 	<description>Burp Suite Plugin to use Collaborator during manual testing</description>
     <packaging>jar</packaging>  

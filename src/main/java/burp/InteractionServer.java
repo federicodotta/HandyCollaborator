@@ -11,10 +11,6 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Date;
 
-//import java.util.Iterator;
-//import java.util.Map;
-//import java.util.Set;
-
 public class InteractionServer extends Thread {
 
 	private IBurpExtenderCallbacks callbacks;
@@ -33,9 +29,12 @@ public class InteractionServer extends Thread {
     private static final String confidence = "Certain";
     
     private static final int pollingMilliseconds = 3000;
+    
+    private final Object pauseLock = new Object();
+    private volatile boolean paused = false;
 	
 	public InteractionServer(IBurpExtenderCallbacks callbacks, HashMap<String,IHttpRequestResponsePersisted> processedRequestResponse, IBurpCollaboratorClientContext initialCollaboratorContext) {
-		
+						
 		this.callbacks = callbacks;
 		this.processedRequestResponse = processedRequestResponse;
 		
@@ -52,6 +51,19 @@ public class InteractionServer extends Thread {
 	
 	public void setGoOn(boolean goOn) {
 		this.goOn = goOn;
+	}
+	
+	public void pause() {
+		paused = true;
+		stdout.println("Stopping Collaborator interactions polling");
+	}
+	
+	public void resumeThread() {
+		synchronized (pauseLock) {
+			paused = false;
+			pauseLock.notifyAll(); // Unblocks thread
+		}
+		stdout.println("Restarting Collaborator interactions polling");
 	}
 	
 	public void addNewCollaboratorContext(IBurpCollaboratorClientContext collaboratorContext) {
@@ -133,53 +145,20 @@ public class InteractionServer extends Thread {
 				
 				break;
 		
-		}
-		
-		// With Burp Professional an issue is added
-		if(callbacks.getBurpVersion()[0].trim().equals("Burp Suite Professional")) {
+		}		
 			
-			CustomScanIssue newIssue = new CustomScanIssue(
-					requestResponse.getHttpService(),
-	                callbacks.getHelpers().analyzeRequest(requestResponse).getUrl(), 
-	                new IHttpRequestResponse[] { requestResponse }, 
-	                interaction.getProperty("type") + issueName,
-	                severity,
-	                confidence,
-	                issueDetails,
-	                remediation);
+		CustomScanIssue newIssue = new CustomScanIssue(
+				requestResponse.getHttpService(),
+                callbacks.getHelpers().analyzeRequest(requestResponse).getUrl(), 
+                new IHttpRequestResponse[] { requestResponse }, 
+                interaction.getProperty("type") + issueName,
+                severity,
+                confidence,
+                issueDetails,
+                remediation);
 
-			callbacks.addScanIssue(newIssue);
+		callbacks.addScanIssue(newIssue);
 			
-		// With Burp Free the issue is printed in stdout, otherwise the plugin is only for Pro version of Burp Suite	
-		} else {
-			
-			stdout.println("****** NEW HANDY COLLABORATOR INTERACTION - BEGIN ******");
-			stdout.println("Issue: " + interaction.getProperty("type") + issueName);
-			stdout.println("Severity: " + severity);
-			stdout.println("Confidence: " + confidence);
-			stdout.println("Host: ");
-			stdout.println("Path: ");
-			stdout.println("");
-			stdout.println("Issue Detail:");
-			stdout.println(issueDetails);
-			stdout.println("");
-			stdout.println("Remediation Detail:");
-			stdout.println(remediation);
-			stdout.println("");
-			stdout.println("Request (encoded in Base64)");
-			stdout.println(callbacks.getHelpers().base64Encode(requestResponse.getRequest()));
-			stdout.println("");
-			if(requestResponse.getResponse() != null) {
-				stdout.println("Response (encoded in Base64)");
-				stdout.println(callbacks.getHelpers().base64Encode(requestResponse.getResponse()));
-				stdout.println("");
-			}
-			stdout.println("****** NEW HANDY COLLABORATOR INTERACTION - END ******");
-			stdout.println("");
-			stdout.println("");
-			
-		}
-	
 	}
 	
 	public void run() {
@@ -188,7 +167,27 @@ public class InteractionServer extends Thread {
 		
 		while(goOn) {
 			
-			
+			synchronized (pauseLock) {
+				
+				// Maybe is changed while waiting for pauseLock
+				if(!goOn) {
+					break;
+				}
+				
+				if (paused) {					
+					try {
+						pauseLock.wait();
+					} catch (InterruptedException e) {
+						stderr.println("Exception with wait/notify");
+						stderr.println(e.toString());
+					}
+					// Maybe is changed while waiting for pauseLock
+					if(!goOn) {
+						break;
+					}
+				}			
+				
+			}
 			
 			for(int i=0;i<collaboratorContextList.size();i++) {
 				
