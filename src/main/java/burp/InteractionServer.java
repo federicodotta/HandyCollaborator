@@ -1,6 +1,7 @@
 package burp;
 
 import java.io.PrintWriter;
+import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.HashMap;
 import java.util.List;
@@ -10,6 +11,7 @@ import java.util.regex.Pattern;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Date;
+import static java.util.concurrent.TimeUnit.*;
 
 public class InteractionServer extends Thread {
 
@@ -170,6 +172,10 @@ public class InteractionServer extends Thread {
 		
 		stdout.println("Thread started");
 		
+		DateFormat dateFormat = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
+		long INTERVAL = MILLISECONDS.convert(3, MINUTES);
+		Date lastPollingDate = null;
+		
 		while(goOn) {
 			
 			synchronized (pauseLock) {
@@ -194,11 +200,26 @@ public class InteractionServer extends Thread {
 				
 			}
 			
+			Date date = new Date();			
+			if(lastPollingDate == null || (date.getTime() - lastPollingDate.getTime()) > INTERVAL) {
+				stdout.println("**** " + dateFormat.format(date) + " ****");
+				for(int i=0;i<collaboratorContextList.size();i++) {
+					try {
+						stdout.println("Polling " + collaboratorContextList.get(i).getCollaboratorServerLocation());
+					} catch(IllegalStateException e) {
+						stdout.println("Can't fetch interactions while Collaborator is disabled (Burp Suite limitation)");
+					} catch(Exception f) {
+						stdout.println("Exception");
+						stdout.println(f.toString());
+					}
+				}
+				stdout.println();
+				lastPollingDate = date;
+			}
+			
 			for(int i=0;i<collaboratorContextList.size();i++) {
 								
 				try {
-					
-					stdout.println("Polling " + collaboratorContextList.get(i).getCollaboratorServerLocation());
 								
 					List<IBurpCollaboratorInteraction> allCollaboratorInteractions = collaboratorContextList.get(i).fetchAllCollaboratorInteractions();
 					
@@ -221,7 +242,10 @@ public class InteractionServer extends Thread {
 					}
 					
 				} catch(IllegalStateException e) {
-					stdout.println("Can't fetch interactions while Collaborator is disabled (Burp Suite limitation)");
+					//stdout.println("Can't fetch interactions while Collaborator is disabled (Burp Suite limitation)");
+				} catch(Exception f) {
+					stdout.println("Exception");
+					stdout.println(f.toString());
 				}
 					
 			}

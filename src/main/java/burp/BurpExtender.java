@@ -48,8 +48,6 @@ public class BurpExtender implements IBurpExtender, IContextMenuFactory, ActionL
     
     private JPanel mainPanel;
     private JCheckBox enablePolling;
-    
-    private boolean interactionServerNeverStarted;
 
 	public void registerExtenderCallbacks(final IBurpExtenderCallbacks callbacks) {
 
@@ -74,13 +72,12 @@ public class BurpExtender implements IBurpExtender, IContextMenuFactory, ActionL
         stdout = new PrintWriter(callbacks.getStdout(), true);
         stderr = new PrintWriter(callbacks.getStderr(), true); 
         
-        stdout.println("Welcome to Handy Collaborator, the plugin that make it possible to use the Collaborator during manual testing!");
+        stdout.println("Welcome to Handy Collaborator, the plugin that make it comfortable to use the Collaborator during manual testing!");
         stdout.println("Created by Federico Dotta and Gianluca Baldi");
         stdout.println("");
         stdout.println("Github: https://github.com/federicodotta/HandyCollaborator");
         stdout.println("");	
                 
-        
         initializeCurrentCollaboratorVariables();
         
         if(!(currentCollaboratorType.equals("none"))) {
@@ -91,18 +88,9 @@ public class BurpExtender implements IBurpExtender, IContextMenuFactory, ActionL
         
         processedRequestResponse = new HashMap<String,IHttpRequestResponsePersisted>();
         
-        //currentCollaboratorLocation = getCurrentCollaboratorLocation();
-        
         interactionServer = new InteractionServer(callbacks,processedRequestResponse,collaboratorContext);
                 
         interactionServer.start();
-        
-        if(collaboratorContext == null) {
-        	interactionServer.pause();
-        	interactionServerNeverStarted = true;
-        } else {
-        	interactionServerNeverStarted = false;
-        }
         
         SwingUtilities.invokeLater(new Runnable()  {
         	
@@ -213,8 +201,6 @@ public class BurpExtender implements IBurpExtender, IContextMenuFactory, ActionL
 		
 		if(isCollaboratorChanged()) {
 			
-			String oldCollaboratorType = currentCollaboratorType;
-			
 			initializeCurrentCollaboratorVariables();
 			
 			if(!(currentCollaboratorType.equals("none"))) {
@@ -222,20 +208,11 @@ public class BurpExtender implements IBurpExtender, IContextMenuFactory, ActionL
 				stdout.println("Collaborator location changed! Adding a new collaborator context to the polling thread!");
 				collaboratorContext = callbacks.createBurpCollaboratorClientContext();
 				interactionServer.addNewCollaboratorContext(collaboratorContext);
-				
-				// Start Collaborator Polling Thread if when the extension was loaded the Collaborator was disabled
-				if(interactionServerNeverStarted) {
-					interactionServer.resumeThread();
-					interactionServerNeverStarted = false;
-				}
 									
 			} else {
 				collaboratorContext = null;
 				stdout.println("Collaborator disabled!");
-				
-				// Stop Collaborator Polling Thread if was not stopped 
-				//if(!(oldCollaboratorType.equals("none")))
-				//	interactionServer.pause();
+
 			}		
 			
 		}
